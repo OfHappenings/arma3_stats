@@ -2,7 +2,7 @@ import datetime
 import argparse
 
 import valve.source.a2s
-from elasticsearch import Elasticsearch
+from influxdb import InfluxDBClient
 
 #SERVER_ADDRESS = ('72.5.195.137', 2303)
 
@@ -17,8 +17,8 @@ from elasticsearch import Elasticsearch
 
 
 class Stats():
-    def __init__(self):
-        self.es = Elasticsearch()
+    def __init__(self, ip, port):
+        self.client = InfluxDBClient(ip, port, 'root', 'root', 'arma3')
 
 
     def get_current_players(self, ip, port):
@@ -30,22 +30,43 @@ class Stats():
    
         print(players.keys())
 
-        body = {'timestamp':now, 'player_count':players['player_count'], 
-                'server_name':info['server_name'], 'ip_addr':ip}
+        #body = {'time':now, 'player_count':players['player_count'], 
+        #        'server_name':info['server_name'], 'ip_addr':ip}
 
-        self.es.index(index='arma3', doc_type='catalog', body=body) 
+        body = [
+        
+        {
+            'measurement':'online_players',
+            'tags':
+            {
+                'server_name':info['server_name'],
+                'ip':ip,
+            },
+            
+            'time':now,
+            'fields':
+            {
+                'player_count':players['player_count']
+            }
+        }]
+
+        #self.es.index(index='arma3', doc_type='catalog', body=body) 
+        self.client.write_points(body)
 
 
 
 if __name__ == '__main__':
-    stats = Stats()
 
-    parser = argparse.ArgumentParser(description='Arma 3 stats to Elasticsearch')
+    parser = argparse.ArgumentParser(description='Arma 3 stats to InfluxDB')
+    parser.add_argument('--db-ip',       action='store', default='localhost')
+    parser.add_argument('--db-port',     action='store', default=8086, type=int) 
     parser.add_argument('--get-players', action='store_true')
     parser.add_argument('--port',        action='store', type=int, required=True)
     parser.add_argument('--ip',      action='store', required=True)
 
     args = parser.parse_args()
+
+    stats = Stats(args.db_ip, args.db_port)
 
     if args.get_players:
         stats.get_current_players(args.ip, args.port)
