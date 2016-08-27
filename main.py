@@ -2,7 +2,9 @@ import datetime
 import argparse
 
 import valve.source.a2s
-from influxdb import InfluxDBClient
+#from influxdb import InfluxDBClient
+
+from elasticsearch import Elasticsearch
 
 #SERVER_ADDRESS = ('72.5.195.137', 2303)
 
@@ -18,12 +20,15 @@ from influxdb import InfluxDBClient
 
 class Stats():
     def __init__(self, ip, port):
-        self.client = InfluxDBClient(ip, port, 'root', 'root', 'arma3')
+       
+        self.es = Elasticsearch(hosts=[{'host':ip, 'port':port}])
+        #self.client = InfluxDBClient(ip, port, 'root', 'root', 'arma3')
+
+
 
 
     def get_current_players(self, ip, port):
-        server_addr = (ip, port)
-        now = datetime.datetime.utcnow()
+        server_addr = (ip, port) now = datetime.datetime.utcnow()
         server  = valve.source.a2s.ServerQuerier(server_addr)
         players = server.get_players()
         info    = server.get_info()
@@ -33,33 +38,46 @@ class Stats():
         #body = {'time':now, 'player_count':players['player_count'], 
         #        'server_name':info['server_name'], 'ip_addr':ip}
 
-        body = [
+        #body = [
         
-        {
-            'measurement':'online_players',
-            'tags':
-            {
-                'server_name':info['server_name'],
-                'ip':ip,
-            },
-            
-            'time':now,
-            'fields':
-            {
-                'player_count':players['player_count']
-            }
-        }]
-
+        #{
+        #    'measurement':'online_players',
+        #    'tags':
+        #    {
+        #        'server_name':info['server_name'],
+        #        'ip':ip,
+        #    },
+        #    
+        #    'time':now,
+        #    'fields':
+        #    {
+        #        'player_count':players['player_count']
+        #    }
+        #}]
+        
         #self.es.index(index='arma3', doc_type='catalog', body=body) 
-        self.client.write_points(body)
 
+        #self.client.write_points(body)
+
+        doc = {
+                'timestamp':now, 
+                'player_count':players['player_count'],
+                'ip':ip,
+                'server_name':info['server_name']
+               }
+               
+
+        res = self.es.index(index='arma_3', doc_type='stats', body=doc)
+
+
+        print(res)
 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Arma 3 stats to InfluxDB')
     parser.add_argument('--db-ip',       action='store', default='localhost')
-    parser.add_argument('--db-port',     action='store', default=8086, type=int) 
+    parser.add_argument('--db-port',     action='store', default=9200, type=int) 
     parser.add_argument('--get-players', action='store_true')
     parser.add_argument('--port',        action='store', type=int, required=True)
     parser.add_argument('--ip',      action='store', required=True)
